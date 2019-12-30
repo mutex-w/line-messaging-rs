@@ -1,2 +1,2 @@
 # line-messaging-rs
-"LINE Messaging API" library for Rust
+LINE Messaging API library for Rust
