@@ -1,5 +1,5 @@
 use crate::event::WebhookEvent;
-use crate::o_auth::OAuthError;
+use crate::oauth::OAuthError;
 use crate::reply::{Reply, ReplyError};
 use log::debug;
 use signature::Algorithm;
@@ -15,7 +15,6 @@ pub trait HandleWebhookEvent {
 pub struct Channel {
     pub id: usize,
     pub secret: String,
-    pub user_id: String,
     access_token: Option<String>,
     handler: Box<dyn HandleWebhookEvent + Send + 'static>,
 }
@@ -24,7 +23,6 @@ impl Channel {
     pub fn new(
         id: usize,
         secret: String,
-        user_id: String,
         access_token: Option<String>,
         handler: impl HandleWebhookEvent + Send + 'static,
     ) -> Self {
@@ -32,7 +30,6 @@ impl Channel {
         Channel {
             id,
             secret,
-            user_id,
             access_token,
             handler,
         }
@@ -108,7 +105,7 @@ impl MessagingApi {
             Some(token) => debug!("既存のアクセストークンを使用します。トークン[{}]", token),
             None => {
                 // アクセストークンが無いため新規に発番する。
-                let token = crate::o_auth::issue_access_token(channel.id, &channel.secret)?;
+                let token = crate::oauth::issue_access_token(channel.id, &channel.secret)?;
                 channel.access_token = Some(token);
             }
         }
