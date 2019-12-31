@@ -1,7 +1,6 @@
 use serde::Deserialize;
 use serde_json::Number;
 
-
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 #[serde(tag = "type")]
@@ -60,7 +59,7 @@ pub enum WebhookEvent {
 }
 
 impl WebhookEvent {
-    pub fn get_reply_token(self) -> Option<String> {
+    pub(crate) fn get_reply_token(self) -> Option<String> {
         match self {
             WebhookEvent::Message {
                 property,
@@ -262,7 +261,7 @@ mod tests {
               }
         "#;
         let message: WebhookMessage = serde_json::from_str(json_str).unwrap();
-        if let WebhookMessage::Text { ref id, ref text } = message {
+        if let WebhookMessage::Text { id, text } = &message {
             assert_eq!(id, "325708");
             assert_eq!(text, "Hello, world");
         } else {

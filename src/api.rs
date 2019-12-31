@@ -1,14 +1,12 @@
-use crate::reply::{Reply, ReplyError};
 use crate::event::WebhookEvent;
-use crate::o_auth;
-use std::collections::HashMap;
-use std::sync::Mutex;
-use signature::Algorithm;
 use crate::o_auth::OAuthError;
-use std::fmt;
-use std::error::Error;
+use crate::reply::{Reply, ReplyError};
 use log::debug;
-use crate::reply;
+use signature::Algorithm;
+use std::collections::HashMap;
+use std::error::Error;
+use std::fmt;
+use std::sync::Mutex;
 
 pub trait HandleWebhookEvent {
     fn handle_webhook_event(&mut self, event: &WebhookEvent) -> Option<Reply>;
@@ -42,16 +40,14 @@ impl Channel {
 
     fn handle_event(&mut self, event: WebhookEvent) -> Option<Reply> {
         match self.handler.handle_webhook_event(&event) {
-            None => None,
             Some(mut reply) => {
                 if let Some(token) = event.get_reply_token() {
                     reply.reply_token = token;
                 }
-                debug!(
-                    "webhookハンドラからリプライオブジェクトを受信しました。"
-                );
+                debug!("webhookハンドラからリプライオブジェクトを受信しました。");
                 Some(reply)
             }
+            None => None,
         }
     }
 }
@@ -72,17 +68,16 @@ impl MessagingApi {
         self
     }
 
-    fn get_channel(&self, channel_id: usize) -> LinebotResult<&Mutex<Channel>> {
+    fn get_channel(&self, channel_id: usize) -> MessagingResult<&Mutex<Channel>> {
         match self.channels.get(&channel_id) {
             Some(channel) => Ok(channel),
-            None => Err(LinebotError::Destination(
-                "宛先チャンネルIDに該当するチャンネルが存在しません。"
-                    .to_owned(),
+            None => Err(MessagingError::Destination(
+                "宛先チャンネルIDに該当するチャンネルが存在しません。".to_owned(),
             )),
         }
     }
 
-    pub(crate) fn sign(&self, channel_id: usize, message: &str, digest: &[u8]) -> LinebotResult<()> {
+    pub fn sign(&self, channel_id: usize, message: &str, digest: &[u8]) -> MessagingResult<()> {
         debug!("webhookリクエストの署名検証を行います。");
         let channel = self.get_channel(channel_id)?.lock().unwrap();
         // HMAC-SHA256-BASE64アルゴリズムに基づいて署名検査を行う。
@@ -91,89 +86,76 @@ impl MessagingApi {
             debug!("webhookリクエストの署名検証に成功しました。");
             Ok(())
         } else {
-            Err(LinebotError::Signature(
+            Err(MessagingError::Signature(
                 "webhookリクエストの署名検証の結果、リクエスト元の正当性を確認できませんでした。"
                     .to_owned(),
             ))
         }
     }
 
-    pub(crate) fn handle_event(&self, channel_id: usize, event: WebhookEvent) -> LinebotResult<()> {
+    pub fn handle_event(&self, channel_id: usize, event: WebhookEvent) -> MessagingResult<()> {
         debug!("webhookイベントのハンドリングを行います。");
         let mut channel = self.get_channel(channel_id)?.lock().unwrap();
         if let Some(reply) = channel.handle_event(event) {
             let token = Self::get_access_token(&mut channel)?;
-            reply::reply(&token, &reply)?;
+            crate::reply::reply(token, &reply)?;
         }
         Ok(())
     }
 
-    fn get_access_token(channel: &mut Channel) -> LinebotResult<String> {
+    fn get_access_token(channel: &mut Channel) -> MessagingResult<&str> {
         match &channel.access_token {
-            Some(token) => {
-                debug!(
-                    "既存のアクセストークンを使用します。トークン[{}]",
-                    token
-                );
-                Ok(token.clone())
-            }
+            Some(token) => debug!("既存のアクセストークンを使用します。トークン[{}]", token),
             None => {
-                let token = o_auth::issue_access_token(channel.id, &channel.secret)?;
-                channel.access_token = Some(token.clone());
-                Ok(token)
+                // アクセストークンが無いため新規に発番する。
+                let token = crate::o_auth::issue_access_token(channel.id, &channel.secret)?;
+                channel.access_token = Some(token);
             }
         }
+        let token = channel.access_token.as_ref().unwrap();
+        Ok(token)
     }
 }
 
-type LinebotResult<T> = Result<T, LinebotError>;
+pub type MessagingResult<T> = Result<T, MessagingError>;
 
 #[derive(Debug)]
-pub(crate) enum LinebotError {
+pub enum MessagingError {
     Destination(String),
     Signature(String),
     OAuth(OAuthError),
     Reply(ReplyError),
 }
 
-impl fmt::Display for LinebotError {
+impl fmt::Display for MessagingError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            LinebotError::Destination(mes) => write!(f, "Destination error: {}", mes),
-            LinebotError::Signature(mes) => write!(f, "Signature error: {}", mes),
-            LinebotError::OAuth(err) => write!(f, "OAuth error: {}", err),
-            LinebotError::Reply(err) => write!(f, "Reply error: {}", err),
+            MessagingError::Destination(mes) => write!(f, "Destination error: {}", mes),
+            MessagingError::Signature(mes) => write!(f, "Signature error: {}", mes),
+            MessagingError::OAuth(err) => write!(f, "OAuth error: {}", err),
+            MessagingError::Reply(err) => write!(f, "Reply error: {}", err),
         }
     }
 }
 
-impl Error for LinebotError {
-    fn description(&self) -> &str {
+impl Error for MessagingError {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
         match self {
-            LinebotError::Destination(mes) => mes,
-            LinebotError::Signature(mes) => mes,
-            LinebotError::OAuth(err) => err.description(),
-            LinebotError::Reply(err) => err.description(),
-        }
-    }
-
-    fn cause(&self) -> Option<&dyn Error> {
-        match self {
-            LinebotError::OAuth(err) => Some(err),
-            LinebotError::Reply(err) => Some(err),
+            MessagingError::OAuth(err) => Some(err),
+            MessagingError::Reply(err) => Some(err),
             _ => None,
         }
     }
 }
 
-impl From<OAuthError> for LinebotError {
+impl From<OAuthError> for MessagingError {
     fn from(err: OAuthError) -> Self {
-        LinebotError::OAuth(err)
+        MessagingError::OAuth(err)
     }
 }
 
-impl From<ReplyError> for LinebotError {
+impl From<ReplyError> for MessagingError {
     fn from(err: ReplyError) -> Self {
-        LinebotError::Reply(err)
+        MessagingError::Reply(err)
     }
 }

@@ -5,7 +5,7 @@ use serde::Deserialize;
 use serde_json::Number;
 use log::{debug, error};
 
-pub fn issue_access_token(channel_id: usize, channel_secret: &str) -> OAuthResult<String> {
+pub(crate) fn issue_access_token(channel_id: usize, channel_secret: &str) -> OAuthResult<String> {
     debug!("チャンネルアクセストークン発行リクエストを行います。");
     let client = reqwest::Client::new();
     let mut res = client
@@ -72,15 +72,7 @@ impl fmt::Display for OAuthError {
 }
 
 impl Error for OAuthError {
-    fn description(&self) -> &str {
-        match self {
-            OAuthError::ErrorResponse(_, _) => "Received error response",
-            OAuthError::Reqwest(err) => err.description(),
-            OAuthError::UnexpectedStatusResponse(_) => "Received unexpected status response",
-        }
-    }
-
-    fn cause(&self) -> Option<&dyn Error> {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
         match self {
             OAuthError::Reqwest(err) => Some(err),
             _ => None,

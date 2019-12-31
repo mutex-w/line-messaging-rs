@@ -30,7 +30,7 @@ pub enum ReplyMessage {
     Text { text: String },
 }
 
-pub fn reply(access_token: &str, reply: &Reply) -> ReplyResult<()> {
+pub(crate) fn reply(access_token: &str, reply: &Reply) -> ReplyResult<()> {
     debug!(
         "リプライのリクエストを行います。アクセストークン[{}], リプライ[{:?}]",
         access_token, reply
@@ -41,7 +41,7 @@ pub fn reply(access_token: &str, reply: &Reply) -> ReplyResult<()> {
         // .headers(headers)
         .header(header::CONTENT_TYPE, "application/json")
         .header(header::AUTHORIZATION, format!("Bearer {}", access_token))
-        .json(&reply)
+        .json(reply)
         .send()
         .expect("リプライのリクエストでエラー発生");
     if res.status() == 200 {
@@ -71,13 +71,7 @@ impl fmt::Display for ReplyError {
 }
 
 impl Error for ReplyError {
-    fn description(&self) -> &str {
-        match self {
-            ReplyError::Reqwest(err) => err.description(),
-        }
-    }
-
-    fn cause(&self) -> Option<&dyn Error> {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
         match self {
             ReplyError::Reqwest(err) => Some(err),
         }
