@@ -1,6 +1,6 @@
 mod api;
-mod event;
+pub mod event;
 mod o_auth;
-mod reply;
+pub mod reply;
 
 pub use api::{MessagingApi, Channel, HandleWebhookEvent};
