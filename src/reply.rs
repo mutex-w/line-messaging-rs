@@ -58,7 +58,7 @@ pub(crate) fn reply(access_token: &str, reply: &Reply) -> ReplyResult<()> {
 type ReplyResult<T> = Result<T, ReplyError>;
 
 #[derive(Debug)]
-pub(crate) enum ReplyError {
+pub enum ReplyError {
     Reqwest(reqwest::Error),
 }
 
