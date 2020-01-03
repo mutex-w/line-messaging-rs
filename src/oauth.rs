@@ -1,9 +1,9 @@
-use std::error::Error;
-use std::fmt;
+use log::{debug, error};
 use reqwest::header;
 use serde::Deserialize;
 use serde_json::Number;
-use log::{debug, error};
+use std::error::Error;
+use std::fmt;
 
 pub(crate) fn issue_access_token(channel_id: usize, channel_secret: &str) -> OAuthResult<String> {
     debug!("チャンネルアクセストークン発行リクエストを行います。");
@@ -20,9 +20,7 @@ pub(crate) fn issue_access_token(channel_id: usize, channel_secret: &str) -> OAu
         .unwrap();
     debug!("チャンネルアクセストークン発行リクエストを送信しました。");
     if res.status() == 200 {
-        debug!(
-            "チャンネルアクセストークン発行リクエストに成功しました。"
-        );
+        debug!("チャンネルアクセストークン発行リクエストに成功しました。");
         let res_body: ResponseBody = res.json().unwrap();
         Ok(res_body.access_token)
     } else if res.status() == 400 {

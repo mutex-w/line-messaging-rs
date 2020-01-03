@@ -1,9 +1,9 @@
-use std::error::Error;
-use std::fmt;
+use log::{debug, error};
 use reqwest::header;
 use reqwest::Client;
 use serde::Serialize;
-use log::{debug, error};
+use std::error::Error;
+use std::fmt;
 
 #[derive(Serialize, Debug)]
 #[serde(rename_all = "camelCase")]
@@ -30,7 +30,7 @@ pub enum ReplyMessage {
     Text { text: String },
 }
 
-pub(crate) fn reply(access_token: &str, reply: &Reply) -> ReplyResult<()> {
+pub(crate) fn respond(access_token: &str, reply: &Reply) -> ReplyResult<()> {
     debug!(
         "リプライのリクエストを行います。アクセストークン[{}], リプライ[{:?}]",
         access_token, reply
