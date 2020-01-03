@@ -7,8 +7,9 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+http = "0.2.0"
+log = "0.4.8"
+reqwest = "0.9.24"
 serde = {version = "1.0.104", features = ["derive"]}
 serde_json = {version = "1.0.44", features = ["arbitrary_precision"]}
 signature = {version = "*", git = "https://github.com/mutex-w/signature-rs"}
-reqwest = "0.9.24"
-log = "0.4.8"

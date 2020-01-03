@@ -1,6 +1,8 @@
+use crate::channel::Channel;
 use crate::event::WebhookEvent;
 use crate::oauth::OAuthError;
-use crate::reply::{Reply, ReplyError};
+use crate::reply::ReplyError;
+use http::Request;
 use log::debug;
 use signature::Algorithm;
 use std::collections::HashMap;
@@ -8,49 +10,8 @@ use std::error::Error;
 use std::fmt;
 use std::sync::Mutex;
 
-pub trait HandleWebhookEvent {
-    fn handle_webhook_event(&mut self, event: &WebhookEvent) -> Option<Reply>;
-}
-
-pub struct Channel {
-    pub id: usize,
-    pub secret: String,
-    access_token: Option<String>,
-    handler: Box<dyn HandleWebhookEvent + Send + 'static>,
-}
-
-impl Channel {
-    pub fn new(
-        id: usize,
-        secret: String,
-        access_token: Option<String>,
-        handler: impl HandleWebhookEvent + Send + 'static,
-    ) -> Self {
-        let handler = Box::new(handler);
-        Channel {
-            id,
-            secret,
-            access_token,
-            handler,
-        }
-    }
-
-    fn handle_event(&mut self, event: WebhookEvent) -> Option<Reply> {
-        match self.handler.handle_webhook_event(&event) {
-            Some(mut reply) => {
-                if let Some(token) = event.get_reply_token() {
-                    reply.reply_token = token;
-                }
-                debug!("webhookハンドラからリプライオブジェクトを受信しました。");
-                Some(reply)
-            }
-            None => None,
-        }
-    }
-}
-
 pub struct MessagingApi {
-    channels: HashMap<usize, Mutex<Channel>>,
+    channels: HashMap<String, Mutex<Channel>>,
 }
 
 impl MessagingApi {
@@ -61,22 +22,23 @@ impl MessagingApi {
     }
 
     pub fn add_channel(mut self, channel: Channel) -> Self {
-        self.channels.insert(channel.id, Mutex::new(channel));
+        self.channels
+            .insert(channel.user_id.clone(), Mutex::new(channel));
         self
     }
 
-    fn get_channel(&self, channel_id: usize) -> MessagingResult<&Mutex<Channel>> {
-        match self.channels.get(&channel_id) {
+    fn get_channel(&self, user_id: &str) -> MessagingResult<&Mutex<Channel>> {
+        match self.channels.get(user_id) {
             Some(channel) => Ok(channel),
             None => Err(MessagingError::Destination(
-                "宛先チャンネルIDに該当するチャンネルが存在しません。".to_owned(),
+                "宛先ユーザーIDに該当するチャンネルが存在しません。".to_owned(),
             )),
         }
     }
 
-    pub fn sign(&self, channel_id: usize, message: &str, digest: &[u8]) -> MessagingResult<()> {
+    pub fn sign(&self, user_id: &str, message: &str, digest: &[u8]) -> MessagingResult<()> {
         debug!("webhookリクエストの署名検証を行います。");
-        let channel = self.get_channel(channel_id)?.lock().unwrap();
+        let channel = self.get_channel(user_id)?.lock().unwrap();
         // HMAC-SHA256-BASE64アルゴリズムに基づいて署名検査を行う。
         let algorithm = Algorithm::HmacSha256Base64(&channel.secret);
         if algorithm.verify(message, digest) {
@@ -90,9 +52,23 @@ impl MessagingApi {
         }
     }
 
-    pub fn handle_event(&self, channel_id: usize, event: WebhookEvent) -> MessagingResult<()> {
+    pub fn sign_with_request(&self, user_id: &str, req: Request<String>) -> MessagingResult<()> {
+        const SIGNATURE_HEADER_KEY: &str = "X-Line-Signature";
+        let message = req.body();
+        let digest = req
+            .headers()
+            .get(SIGNATURE_HEADER_KEY)
+            .ok_or(MessagingError::Signature(format!(
+                "{}ヘッダーが存在しません。",
+                SIGNATURE_HEADER_KEY
+            )))?
+            .as_bytes();
+        self.sign(user_id, message, digest)
+    }
+
+    pub fn handle_event(&self, user_id: &str, event: WebhookEvent) -> MessagingResult<()> {
         debug!("webhookイベントのハンドリングを行います。");
-        let mut channel = self.get_channel(channel_id)?.lock().unwrap();
+        let mut channel = self.get_channel(user_id)?.lock().unwrap();
         if let Some(reply) = channel.handle_event(event) {
             let token = Self::get_access_token(&mut channel)?;
             crate::reply::reply(token, &reply)?;
