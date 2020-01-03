@@ -52,20 +52,6 @@ impl MessagingApi {
         }
     }
 
-    pub fn sign_with_request(&self, user_id: &str, req: Request<String>) -> MessagingResult<()> {
-        const SIGNATURE_HEADER_KEY: &str = "X-Line-Signature";
-        let message = req.body();
-        let digest = req
-            .headers()
-            .get(SIGNATURE_HEADER_KEY)
-            .ok_or(MessagingError::Signature(format!(
-                "{}ヘッダーが存在しません。",
-                SIGNATURE_HEADER_KEY
-            )))?
-            .as_bytes();
-        self.sign(user_id, message, digest)
-    }
-
     pub fn handle_event(&self, user_id: &str, event: WebhookEvent) -> MessagingResult<()> {
         debug!("webhookイベントのハンドリングを行います。");
         let mut channel = self.get_channel(user_id)?.lock().unwrap();
