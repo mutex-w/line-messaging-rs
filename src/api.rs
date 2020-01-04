@@ -1,6 +1,6 @@
 use crate::channel::Channel;
 use crate::oauth::OAuthError;
-use crate::reply::{ReplyError, respond};
+use crate::reply::{respond, ReplyError};
 use crate::request::{RequestBody, RequestBodyError};
 use log::debug;
 use signature::Algorithm;
@@ -58,7 +58,7 @@ impl MessagingApi {
         let user_id = &body.destination;
         debug!("webhookイベントのハンドリングを行います。");
         let mut channel = self.get_channel(user_id)?.lock().unwrap();
-        for event in body.events{
+        for event in body.events {
             if let Some(reply) = channel.handle_event(event) {
                 let token = Self::get_access_token(&mut channel)?;
                 respond(token, &reply)?;
