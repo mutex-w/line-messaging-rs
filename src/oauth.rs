@@ -1,9 +1,8 @@
+use failure::Fail;
 use log::{debug, error};
 use reqwest::header;
 use serde::Deserialize;
 use serde_json::Number;
-use std::error::Error;
-use std::fmt;
 
 pub(crate) fn issue_access_token(channel_id: usize, channel_secret: &str) -> OAuthResult<String> {
     debug!("チャンネルアクセストークン発行リクエストを行います。");
@@ -27,60 +26,42 @@ pub(crate) fn issue_access_token(channel_id: usize, channel_secret: &str) -> OAu
         let e_res_body: ErrorResponseBody = res.json().unwrap();
         error!("チャンネルアクセストークン発行リクエストエラーレスポンスを受信しました。ステータス[{}], エラーレスポンス[{:?}]"
                , res.status(), e_res_body);
-        Err(OAuthError::ErrorResponse(
-            e_res_body.error,
-            e_res_body.error_description,
-        ))
+        Err(OAuthError::ErrorResponse {
+            message: e_res_body.error,
+            description: e_res_body.error_description,
+        })
     } else {
         error!(
             "チャンネルアクセストークン発行リクエストに失敗しました。ステータス[{}]",
             res.status()
         );
-        Err(OAuthError::UnexpectedStatusResponse(u16::from(
-            res.status(),
-        )))
+        Err(OAuthError::UnexpectedStatusResponse {
+            status: u16::from(res.status()),
+        })
     }
 }
 
 type OAuthResult<T> = Result<T, OAuthError>;
 
-#[derive(Debug)]
+#[derive(Debug, Fail)]
 pub enum OAuthError {
-    ErrorResponse(String, Option<String>),
-    Reqwest(reqwest::Error),
-    UnexpectedStatusResponse(u16),
-}
-
-impl fmt::Display for OAuthError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            OAuthError::ErrorResponse(err, err_desc) => {
-                if let Some(desc) = err_desc {
-                    write!(f, "Error response: {}, description: {}", err, desc)
-                } else {
-                    write!(f, "Error response: {}", err)
-                }
-            }
-            OAuthError::Reqwest(err) => write!(f, "Request failed: {}", err),
-            OAuthError::UnexpectedStatusResponse(status) => {
-                write!(f, "Unexpected status response: status = {}", status)
-            }
-        }
-    }
-}
-
-impl Error for OAuthError {
-    fn source(&self) -> Option<&(dyn Error + 'static)> {
-        match self {
-            OAuthError::Reqwest(err) => Some(err),
-            _ => None,
-        }
-    }
+    #[fail(
+        display = "Error response: {}, description: {:?}",
+        message, description
+    )]
+    ErrorResponse {
+        message: String,
+        description: Option<String>,
+    },
+    #[fail(display = "Request error: {}", error)]
+    Reqwest { error: reqwest::Error },
+    #[fail(display = "Unexpected status response: status = {}", status)]
+    UnexpectedStatusResponse { status: u16 },
 }
 
 impl From<reqwest::Error> for OAuthError {
-    fn from(err: reqwest::Error) -> Self {
-        OAuthError::Reqwest(err)
+    fn from(error: reqwest::Error) -> Self {
+        OAuthError::Reqwest { error }
     }
 }
 

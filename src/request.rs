@@ -1,8 +1,7 @@
 use crate::event::WebhookEvent;
+use failure::Fail;
 use serde::Deserialize;
-use std::error::Error;
 use std::convert::TryFrom;
-use std::fmt::{self, Formatter, Display};
 
 #[derive(Deserialize, Debug)]
 pub struct RequestBody {
@@ -14,36 +13,21 @@ pub struct RequestBody {
 
 impl TryFrom<String> for RequestBody {
     type Error = RequestBodyError;
-    fn try_from(s: String) -> Result<Self, Self::Error>{
+    fn try_from(s: String) -> Result<Self, Self::Error> {
         let mut body = serde_json::from_str::<RequestBody>(&s)?;
         body.src = s;
         Ok(body)
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Fail)]
 pub enum RequestBodyError {
-    Parse(serde_json::Error),
-}
-
-impl Display for RequestBodyError {
-    fn fmt(&self, f: &mut Formatter) -> fmt::Result{
-        match self {
-            RequestBodyError::Parse(mes) => write!(f, "Parse error: {}", mes),
-        }
-    }
-}
-
-impl Error for RequestBodyError {
-    fn source(&self) -> Option<&(dyn Error + 'static)> {
-        match self {
-            RequestBodyError::Parse(err) => Some(err),
-        }
-    } 
+    #[fail(display = "Parse error: {}", error)]
+    Parse { error: serde_json::Error },
 }
 
 impl From<serde_json::Error> for RequestBodyError {
-    fn from(err: serde_json::Error) -> Self {
-        RequestBodyError::Parse(err)
+    fn from(error: serde_json::Error) -> Self {
+        RequestBodyError::Parse { error }
     }
 }

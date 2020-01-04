@@ -1,9 +1,8 @@
+use failure::Fail;
 use log::{debug, error};
 use reqwest::header;
 use reqwest::Client;
 use serde::Serialize;
-use std::error::Error;
-use std::fmt;
 
 #[derive(Serialize, Debug)]
 #[serde(rename_all = "camelCase")]
@@ -57,29 +56,14 @@ pub(crate) fn respond(access_token: &str, reply: &Reply) -> ReplyResult<()> {
 
 type ReplyResult<T> = Result<T, ReplyError>;
 
-#[derive(Debug)]
+#[derive(Debug, Fail)]
 pub enum ReplyError {
-    Reqwest(reqwest::Error),
-}
-
-impl fmt::Display for ReplyError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            ReplyError::Reqwest(err) => write!(f, "Request failed: {}", err),
-        }
-    }
-}
-
-impl Error for ReplyError {
-    fn source(&self) -> Option<&(dyn Error + 'static)> {
-        match self {
-            ReplyError::Reqwest(err) => Some(err),
-        }
-    }
+    #[fail(display = "Request error: {}", error)]
+    Reqwest { error: reqwest::Error },
 }
 
 impl From<reqwest::Error> for ReplyError {
-    fn from(err: reqwest::Error) -> Self {
-        ReplyError::Reqwest(err)
+    fn from(error: reqwest::Error) -> Self {
+        ReplyError::Reqwest { error }
     }
 }
