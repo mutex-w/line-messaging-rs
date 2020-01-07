@@ -27,13 +27,11 @@ impl MessagingApi {
     }
 
     fn get_channel(&self, user_id: &str) -> MessagingResult<&Mutex<Channel>> {
-        match self.channels.get(user_id) {
-            Some(channel) => Ok(channel),
-            None => Err(MessagingError::Destination{
-                message:
-                "宛先ユーザーIDに該当するチャンネルが存在しません。".to_owned(),
-            }),
-        }
+        self.channels.get(user_id).ok_or(
+            MessagingError::Destination {
+                    message: "宛先ユーザーIDに該当するチャンネルが存在しません。".to_owned(),
+            }
+        )
     }
 
     pub fn sign(&self, message: String, digest: &[u8]) -> MessagingResult<RequestBody> {
@@ -43,15 +41,14 @@ impl MessagingApi {
         let channel = self.get_channel(user_id)?.lock().unwrap();
         // HMAC-SHA256-BASE64アルゴリズムに基づいて署名検査を行う。
         let algorithm = Algorithm::HmacSha256Base64(&channel.secret);
-        if algorithm.verify(&body.src, digest) {
-            debug!("webhookリクエストの署名検証に成功しました。");
-            Ok(body)
-        } else {
-            Err(MessagingError::Signature{message: 
+        if !algorithm.verify(&body.src, digest) {
+            return Err(MessagingError::Signature{message: 
                 "webhookリクエストの署名検証の結果、リクエスト元の正当性を確認できませんでした。"
                     .to_owned(),
             })
         }
+        debug!("webhookリクエストの署名検証に成功しました。");
+        Ok(body)
     }
 
     pub fn handle_event(&self, body: RequestBody) -> MessagingResult<()> {
